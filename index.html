@@ -14,11 +14,7 @@
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;background:var(--bg0);color:var(--ink);font-family:"VT323",monospace; letter-spacing:.5px}
   #app{min-height:100%;display:flex;align-items:center;justify-content:center}
-  .crt::after{
-    content:"";position:fixed;inset:0;pointer-events:none;opacity:.25;
-    background-image:var(--scan);
-    background-size:100% 2px;mix-blend-mode:overlay
-  }
+  .crt::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.25;background-image:var(--scan);background-size:100% 2px;mix-blend-mode:overlay}
   canvas{image-rendering:pixelated}
   button,.btn{font:inherit;border:3px solid var(--ink); background:transparent; color:var(--ink);
     padding:.4rem .8rem; cursor:pointer; box-shadow:4px 4px 0 #0006; text-transform:uppercase}
@@ -271,7 +267,6 @@ function beep(freq=440, dur=.08, type="square", vol=S.sfxVol){
 }
 function playMusic(on=true){
   if(!on){ if(musicSeq){ musicSeq.stop(); musicSeq=null; } return; }
-  // very light chiptune arpeggio loop
   const o1=AC.createOscillator(), o2=AC.createOscillator(), g=AC.createGain();
   o1.type="square"; o2.type="triangle"; g.gain.value=S.musVol*0.15;
   o1.connect(g); o2.connect(g); g.connect(AC.destination);
@@ -355,7 +350,6 @@ const LEVELS={
   ]
 };
 function lightenPalette(levelIndex){
-  // subtle brighten/desaturate per level
   const amt = (levelIndex)*0.04;
   document.body.style.filter = `saturate(${1-amt}) brightness(${1+amt})`;
 }
@@ -383,33 +377,41 @@ const FALLBACK_ART=[
   {title:"Water Lilies", artist:"Claude Monet", year:"1916",
    src:"https://upload.wikimedia.org/wikipedia/commons/0/0a/Claude_Monet_-_Water_Lilies_-_Google_Art_Project.jpg", link:"https://www.nga.gov/"}
 ];
+
+/*  FIXED: safer NGA fetch (no TS operators; tolerant mapping)  */
 async function fetchNGA(){
-  // Try NGA Collection API (public domain with images). If it fails, return []
   try{
     const url="https://api.nga.gov/collection/artwork?size=9&hasImages=true&isPublicDomain=true&sort=random";
     const res = await fetch(url,{mode:"cors"});
     if(!res.ok) throw new Error("HTTP "+res.status);
     const json = await res.json();
-    // map to artwork objects; try IIIF primary image
-    const list = (json?.data||[]).map(d=>{
-      const iiif = d.images?.length ? d.images[0].iiif?.manifest : null;
-      let src = d.images?.length ? (d.images[0].iiif?.baseUrl || d.images[0].web!.url) : null;
-      // Ensure a normal image (iiif base + /full/!400,400/0/default.jpg)
-      if(d.images?.length && d.images[0].iiif?.baseUrl) src = d.images[0].iiif.baseUrl + "/full/!512,512/0/default.jpg";
+    const items = Array.isArray(json?.data) ? json.data : [];
+    const list = items.map(d=>{
+      // Try to discover an image URL in several ways safely
+      let src = null;
+      const img = (d.images && d.images[0]) ? d.images[0] : null;
+      if (img && img.iiif) {
+        const base = img.iiif.baseUrl || img.iiif.id || null;
+        if (base) src = base + "/full/!512,512/0/default.jpg";
+      }
+      if (!src && img && img.web && img.web.url) src = img.web.url;
+      const linkId = d.objectId || d.id || d.objectID || "";
       return {
-        title:d.title, artist:(d.people?.[0]?.name)||"Unknown",
-        year:d.dates?.display||"", src, link:`https://www.nga.gov/collection/art-object-page.${d.objectId}.html`
+        title: d.title || "Untitled",
+        artist: (d.people && d.people[0] && d.people[0].name) ? d.people[0].name : "Unknown",
+        year: (d.dates && d.dates.display) ? d.dates.display : (d.creationDate || ""),
+        src, link: linkId ? `https://www.nga.gov/collection/art-object-page.${linkId}.html` : "https://www.nga.gov/collection.html"
       };
     }).filter(x=>x.src);
     return list;
   }catch(e){ console.warn("NGA fetch failed", e); return []; }
 }
+
 async function buildGallery(){
   $("#topCampaign").textContent=S.campaign;
   lightenPalette(0);
   let arts = await fetchNGA();
   if(!arts.length){ arts = FALLBACK_ART; toast("Using fallback artworks (NGA API blocked). You can still play!"); }
-  // Apply custom overrides if provided
   arts = arts.map((a,i)=> ({...a, src: S.customImgs[i]?S.customImgs[i]:a.src}));
   S.artworks = arts;
   const g=$("#gallery"); g.innerHTML="";
@@ -484,19 +486,13 @@ function tick(ts){
 }
 
 /* ----------------------- MINIGAMES ----------------------- */
-/* Helpers for input */
 const Keys={}; window.addEventListener("keydown",e=>{Keys[e.key]=true; if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();});
 window.addEventListener("keyup",e=>Keys[e.key]=false);
-
-/* Base template */
-function MiniBase(name, time=30){ return {
-  name, time, t:0, over:false, pass:false,
+function MiniBase(name, time=30){ return {name,time,t:0,over:false,pass:false,
   update(dt){ this.t+=dt; if(this.t>this.time){ this.over=true; setAlert(S.alert+20); beep(200,.1); } },
   render(ctx){ ctx.imageSmoothingEnabled=false; ctx.fillStyle="#0E2148"; ctx.fillRect(0,0,C.width,C.height); },
   done(){return this.over;}
 };}
-
-/* 1) PasswordLock - Mastermind 4 digits */
 function PasswordLock(){
   const M=MiniBase("PasswordLock", 40);
   const code=Array.from({length:4},()=>Math.floor(Math.random()*10));
@@ -526,11 +522,10 @@ function PasswordLock(){
   };
   return M;
 }
-/* 2) Firewall Maze */
 function FirewallMaze(){
   const M=MiniBase("Firewall", 35);
   const grid=16, size=28;
-  const walls=new Set(); // blocked ports
+  const walls=new Set();
   for(let i=0;i<80;i++) walls.add((Math.random()*grid|0)+","+(Math.random()*grid|0));
   const start=[0,Math.random()*grid|0], goal=[grid-1, Math.random()*grid|0];
   let px=start[0], py=start[1];
@@ -557,7 +552,6 @@ function FirewallMaze(){
   };
   return M;
 }
-/* 3) Phishing Spotter */
 function PhishingSpotter(){
   const M=MiniBase("Phishing", 35);
   const items=[
@@ -589,7 +583,6 @@ function PhishingSpotter(){
   };
   return M;
 }
-/* 4) Cipher Wheel (Caesar) */
 function CipherWheel(){
   const M=MiniBase("Cipher", 40);
   const plain="ARTHEIST"; const shift = (Math.random()*25|0)+1;
@@ -613,7 +606,6 @@ function CipherWheel(){
   };
   return M;
 }
-/* 5) Camera Sweep (stealth) */
 function CameraSweep(){
   const M=MiniBase("Camera", 35);
   const W=20, H=14, size=28;
@@ -624,7 +616,6 @@ function CameraSweep(){
     cams.forEach(c=>c.ang=(c.ang+dt*c.speed)% (Math.PI*2));
     let nx=px,ny=py; if(tap("ArrowUp","w"))ny--; if(tap("ArrowDown","s"))ny++; if(tap("ArrowLeft","a"))nx--; if(tap("ArrowRight","d"))nx++;
     nx=Math.max(1,Math.min(W-2,nx)); ny=Math.max(1,Math.min(H-2,ny)); px=nx; py=ny;
-    // detection cone
     cams.forEach(c=>{
       const dx=px-c.x, dy=py-c.y; const ang=Math.atan2(dy,dx); const diff=angleDiff(ang,c.ang);
       const dist=Math.hypot(dx,dy);
@@ -640,7 +631,6 @@ function CameraSweep(){
     }
     cams.forEach(c=>{
       rect(ctx,40+c.x*size,40+c.y*size,size-2,size-2,"#E3D095");
-      // cone
       ctx.fillStyle="rgba(255,255,153,.2)";
       ctx.beginPath();
       const cx=40+c.x*size+size/2, cy=40+c.y*size+size/2;
@@ -655,7 +645,6 @@ function CameraSweep(){
   };
   return M;
 }
-/* 6) IDS Pattern Match (wildcards) */
 function IDSMatch(){
   const M=MiniBase("IDS", 35);
   const samples=["/login.php?u=admin","/etc/passwd","/index.html","/cmd.php?exec=cat","/wp-admin","/api/v1/users","/bin/sh","/robots.txt","/wp-login.php","/search?q=<script>"];
@@ -663,7 +652,7 @@ function IDSMatch(){
   let sel=new Set(), score=0;
   M.update=function(dt){
     MiniBase.prototype.update.call(this,dt); if(this.over) return;
-    if(tap(" ","Enter")){ // submit
+    if(tap(" ","Enter")){
       score=0; samples.forEach((s,i)=>{ const good=matchAny(s, pattern); const chosen=sel.has(i); if(good&&chosen) score++; else if(good&&!chosen) setAlert(S.alert+4); else if(!good&&chosen) setAlert(S.alert+3); });
       this.over=true; this.pass=score>=3;
       if(this.pass) beep(1000,.15); else flash();
@@ -697,7 +686,6 @@ function nextMinigame(){
   currentMini = { PasswordLock, Firewall:FirewallMaze, Phishing:PhishingSpotter, Cipher:CipherWheel, Camera:CameraSweep, IDS:IDSMatch }[m]();
   $("#miniList").querySelectorAll("li").forEach((li,i)=>{ li.style.opacity = i<S.minigameIndex?1:.6; if(i===S.minigameIndex-1) li.style.color="#E3D095"; });
   t0=0; if(loopId) cancelAnimationFrame(loopId); loopId=requestAnimationFrame(tick);
-  // When mini finishes, chain to next with tiny delay
   const chk = setInterval(()=>{
     if(currentMini.done()){
       clearInterval(chk);
@@ -720,21 +708,15 @@ function textWrap(ctx,str,x,y,w,lh=18){ const words=str.split(" "); let line="",
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1500); }
 function caesar(s,sh){ return s.replace(/[A-Z]/g,c=>String.fromCharCode(65+( (c.charCodeAt(0)-65+sh)%26 ))); }
 function matchAny(s, pat){ return pat.split("|").some(p=>wild(s,p)); }
-function wild(str, pat){ // '*' and '?' only
-  const rx = new RegExp("^"+pat.replace(/[.+^${}()|[\]\\]/g,'\\$&').replace(/\*/g,".*").replace(/\?/g,".")+"$"); return rx.test(str);
-}
+function wild(str, pat){ const rx = new RegExp("^"+pat.replace(/[.+^${}()|[\\]\\\\]/g,'\\$&').replace(/\*/g,".*").replace(/\?/g,".")+"$"); return rx.test(str); }
 
 /* ----------------------- INIT ----------------------- */
 $("#app").classList.toggle("crt", S.crt);
 $("#musicBtn").textContent=S.musicOn?"Music On":"Music Off";
 $("#muteBtn").textContent=S.sfxOn?"SFX On":"SFX Off";
-
-/* Keyboard confirm shortcuts on menus */
 window.addEventListener("keydown",(e)=>{
   if(S.mode==="title" && (e.key==="Enter"||e.key===" ")){ go("campaign"); }
 });
-
-/* ----------------------- END ----------------------- */
 </script>
 </body>
 </html>
