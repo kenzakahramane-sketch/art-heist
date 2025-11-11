@@ -13,16 +13,17 @@
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;background:var(--bg0);color:var(--ink);font-family:"VT323",monospace; letter-spacing:.5px}
-  #app{min-height:100%;display:flex;align-items:center;justify-content:center}
+  #app{min-height:100%;display:flex;align-items:center;justify-content:center; overflow:hidden}
   .crt::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.25;background-image:var(--scan);background-size:100% 2px;mix-blend-mode:overlay}
   canvas{image-rendering:pixelated}
   button,.btn{font:inherit;border:3px solid var(--ink); background:transparent; color:var(--ink);
     padding:.4rem .8rem; cursor:pointer; box-shadow:4px 4px 0 #0006; text-transform:uppercase}
   button:hover{transform:translate(-1px,-1px)}
   .muted{opacity:.75}
-  .screen{display:none; width:1100px; max-width:95vw; min-height:640px; border:6px solid var(--ink); padding:18px;
+  /* >>> hard-hide screens so only one shows */
+  .screen{display:none !important; width:1100px; max-width:95vw; min-height:640px; border:6px solid var(--ink); padding:18px;
     background:linear-gradient(180deg,var(--bg1),var(--bg0)); position:relative}
-  .visible{display:block}
+  .visible{display:block !important}
   h1,h2,h3{margin:.25rem 0; line-height:1}
   h1.title{font-size:72px; color:var(--ink2); text-shadow:4px 4px 0 #000, 0 0 18px #ffd}
   .row{display:flex; gap:14px; align-items:center}
@@ -131,7 +132,7 @@
       <button id="resetProgress" class="btn">Reset Progress</button></div>
   </section>
 
-  <!-- LEVEL INTRO / HUD / CANVAS -->
+  <!-- LEVEL / HUD -->
   <section id="level" class="screen">
     <div class="topbar">
       <div class="row">
@@ -377,8 +378,6 @@ const FALLBACK_ART=[
   {title:"Water Lilies", artist:"Claude Monet", year:"1916",
    src:"https://upload.wikimedia.org/wikipedia/commons/0/0a/Claude_Monet_-_Water_Lilies_-_Google_Art_Project.jpg", link:"https://www.nga.gov/"}
 ];
-
-/*  FIXED: safer NGA fetch (no TS operators; tolerant mapping)  */
 async function fetchNGA(){
   try{
     const url="https://api.nga.gov/collection/artwork?size=9&hasImages=true&isPublicDomain=true&sort=random";
@@ -387,7 +386,6 @@ async function fetchNGA(){
     const json = await res.json();
     const items = Array.isArray(json?.data) ? json.data : [];
     const list = items.map(d=>{
-      // Try to discover an image URL in several ways safely
       let src = null;
       const img = (d.images && d.images[0]) ? d.images[0] : null;
       if (img && img.iiif) {
@@ -406,7 +404,6 @@ async function fetchNGA(){
     return list;
   }catch(e){ console.warn("NGA fetch failed", e); return []; }
 }
-
 async function buildGallery(){
   $("#topCampaign").textContent=S.campaign;
   lightenPalette(0);
@@ -440,7 +437,7 @@ function renderStars(n){
 }
 $("#resetProgress").onclick=()=>{ S.bestStars={HEIST:Array(6).fill(0),GUARD:Array(6).fill(0)}; save(); buildGallery(); toast("Progress reset."); }
 
-/* ----------------------- START LEVEL ----------------------- */
+/* ----------------------- LEVEL FLOW ----------------------- */
 const C = $("#game"), CTX = C.getContext("2d");
 let loopId=null, t0=0, currentMini=null, levelFail=false, levelTime=0;
 function startLevel(idx){
@@ -450,10 +447,11 @@ function startLevel(idx){
   const art=S.artworks[idx];
   $("#artTitle").textContent=art.title; $("#artMeta").textContent=`${art.artist} • ${art.year}`;
   $("#artImg").src=art.src; $("#artLink").href=art.link||"#";
-  $("#miniList").innerHTML = LEVELS[S.campaign][idx].mini.map((m,i)=>`<li>${m}</li>`).join("");
+  $("#miniList").innerHTML = LEVELS[S.campaign][idx].mini.map((m)=>`<li>${m}</li>`).join("");
   $("#timer").textContent="0.0s";
   lightenPalette(idx);
   go("level");
+  focusCanvas();           /* >>> ensure keyboard focus */
   nextMinigame();
   if(S.musicOn){ playMusic(true); }
 }
@@ -467,8 +465,10 @@ function endLevel(){
   $("#postStars").innerHTML=renderStars(stars);
   $("#postStats").textContent=`Alert ${(loss*100)|0}% • Time ${levelTime.toFixed(1)}s`;
   go("post");
-  if(S.campaign==="HEIST" && S.bestStars.HEIST.every(s=>s>0) && S.bestStars.GUARD.every(s=>s>0)){
-    $("#endStats").textContent=`All levels cleared! Total Stars: ${S.totalStars()}`; go("theEnd");
+  /* >>> show The End only after actual success of all levels */
+  if(!levelFail){
+    const allCleared = S.bestStars.HEIST.every(s=>s>0) && S.bestStars.GUARD.every(s=>s>0);
+    if(allCleared){ $("#endStats").textContent=`All levels cleared! Total Stars: ${S.totalStars()}`; go("theEnd"); return; }
   }
 }
 $("#retryBtn").onclick=()=>startLevel(S.levelIndex);
@@ -476,7 +476,7 @@ $("#nextBtn").onclick=()=>{ const i=Math.min(S.levelIndex+1,5); startLevel(i); }
 $("#abortLevel").onclick=()=>go("map");
 $("#pauseBtn").onclick=()=>toast("Paused (press actions to resume)");
 
-/* ----------------------- CORE LOOP ----------------------- */
+/* ----------------------- GAME LOOP ----------------------- */
 function setAlert(x){ S.alert=Math.min(S.alertMax, Math.max(0,x)); $("#alertBar").style.width=(S.alert/S.alertMax*100)+"%"; if(S.alert>=S.alertMax){ levelFail=true; endLevel(); } }
 function flash(){ if(S.reducedFlashes) return; C.style.filter="brightness(1.6)"; setTimeout(()=>C.style.filter="",100); }
 function tick(ts){
@@ -486,13 +486,20 @@ function tick(ts){
 }
 
 /* ----------------------- MINIGAMES ----------------------- */
-const Keys={}; window.addEventListener("keydown",e=>{Keys[e.key]=true; if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();});
+const Keys={};
+window.addEventListener("keydown",e=>{
+  Keys[e.key]=true;
+  if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," ","Enter","Tab"].includes(e.key)) e.preventDefault();
+});
 window.addEventListener("keyup",e=>Keys[e.key]=false);
+
+/* base */
 function MiniBase(name, time=30){ return {name,time,t:0,over:false,pass:false,
   update(dt){ this.t+=dt; if(this.t>this.time){ this.over=true; setAlert(S.alert+20); beep(200,.1); } },
   render(ctx){ ctx.imageSmoothingEnabled=false; ctx.fillStyle="#0E2148"; ctx.fillRect(0,0,C.width,C.height); },
   done(){return this.over;}
 };}
+/* 1) Password Lock */
 function PasswordLock(){
   const M=MiniBase("PasswordLock", 40);
   const code=Array.from({length:4},()=>Math.floor(Math.random()*10));
@@ -522,6 +529,7 @@ function PasswordLock(){
   };
   return M;
 }
+/* 2) Firewall Maze */
 function FirewallMaze(){
   const M=MiniBase("Firewall", 35);
   const grid=16, size=28;
@@ -552,6 +560,7 @@ function FirewallMaze(){
   };
   return M;
 }
+/* 3) Phishing Spotter */
 function PhishingSpotter(){
   const M=MiniBase("Phishing", 35);
   const items=[
@@ -583,6 +592,7 @@ function PhishingSpotter(){
   };
   return M;
 }
+/* 4) Cipher Wheel */
 function CipherWheel(){
   const M=MiniBase("Cipher", 40);
   const plain="ARTHEIST"; const shift = (Math.random()*25|0)+1;
@@ -606,6 +616,7 @@ function CipherWheel(){
   };
   return M;
 }
+/* 5) Camera Sweep */
 function CameraSweep(){
   const M=MiniBase("Camera", 35);
   const W=20, H=14, size=28;
@@ -645,6 +656,7 @@ function CameraSweep(){
   };
   return M;
 }
+/* 6) IDS Pattern Match */
 function IDSMatch(){
   const M=MiniBase("IDS", 35);
   const samples=["/login.php?u=admin","/etc/passwd","/index.html","/cmd.php?exec=cat","/wp-admin","/api/v1/users","/bin/sh","/robots.txt","/wp-login.php","/search?q=<script>"];
@@ -671,8 +683,8 @@ function IDSMatch(){
   };
   C.onclick=function(e){
     if(S.mode!=="level" || currentMini?.name!=="IDS") return;
-    const r=C.getBoundingClientRect(), mx=(e.clientX-r.left)/r.width*C.width, my=(e.clientY-r.top)/r.height*C.height;
-    const x0=60,y0=100;
+    const r=C.getBoundingClientRect(), my=(e.clientY-r.top)/r.height*C.height;
+    const y0=100;
     const i=Math.floor((my-y0)/30); if(i>=0 && i<10) { if(sel.has(i)) sel.delete(i); else sel.add(i); beep(600,.05); }
   };
   return M;
@@ -709,6 +721,16 @@ function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("sh
 function caesar(s,sh){ return s.replace(/[A-Z]/g,c=>String.fromCharCode(65+( (c.charCodeAt(0)-65+sh)%26 ))); }
 function matchAny(s, pat){ return pat.split("|").some(p=>wild(s,p)); }
 function wild(str, pat){ const rx = new RegExp("^"+pat.replace(/[.+^${}()|[\\]\\\\]/g,'\\$&').replace(/\*/g,".*").replace(/\?/g,".")+"$"); return rx.test(str); }
+
+/* >>> ensure keyboard focus + audio unlock */
+function focusCanvas(){ C.setAttribute('tabindex','0'); C.focus(); }
+function unlockAudioOnce(){
+  const resume = ()=>{ if(AC.state === 'suspended') AC.resume(); document.removeEventListener('click',resume); document.removeEventListener('keydown',resume); };
+  document.addEventListener('click',resume);
+  document.addEventListener('keydown',resume);
+}
+unlockAudioOnce();
+C.addEventListener('pointerdown', focusCanvas);
 
 /* ----------------------- INIT ----------------------- */
 $("#app").classList.toggle("crt", S.crt);
