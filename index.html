@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Art Heist</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg0:#0E2148; --bg1:#483AA0; --bg2:#7965C1; --ac1:#E3D095;
+    --ink:#E3D095; --ink2:#fffbe6;
+    --scan:linear-gradient(rgba(255,255,255,0.06) 50%, rgba(0,0,0,0.06) 50%);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg0);color:var(--ink);font-family:"VT323",monospace; letter-spacing:.5px}
+  #app{min-height:100%;display:flex;align-items:center;justify-content:center}
+  .crt::after{
+    content:"";position:fixed;inset:0;pointer-events:none;opacity:.25;
+    background-image:var(--scan);
+    background-size:100% 2px;mix-blend-mode:overlay
+  }
+  canvas{image-rendering:pixelated}
+  button,.btn{font:inherit;border:3px solid var(--ink); background:transparent; color:var(--ink);
+    padding:.4rem .8rem; cursor:pointer; box-shadow:4px 4px 0 #0006; text-transform:uppercase}
+  button:hover{transform:translate(-1px,-1px)}
+  .muted{opacity:.75}
+  .screen{display:none; width:1100px; max-width:95vw; min-height:640px; border:6px solid var(--ink); padding:18px;
+    background:linear-gradient(180deg,var(--bg1),var(--bg0)); position:relative}
+  .visible{display:block}
+  h1,h2,h3{margin:.25rem 0; line-height:1}
+  h1.title{font-size:72px; color:var(--ink2); text-shadow:4px 4px 0 #000, 0 0 18px #ffd}
+  .row{display:flex; gap:14px; align-items:center}
+  .col{display:flex;flex-direction:column;gap:10px}
+  .center{display:flex;align-items:center;justify-content:center}
+  .bar{height:18px; border:3px solid var(--ink); width:280px; position:relative}
+  .bar > i{display:block;height:100%; background:#ff4d4d}
+  .badge{padding:.2rem .5rem;border:2px solid var(--ink); background:rgba(0,0,0,.2)}
+  .grid{display:grid; gap:10px}
+  .gallery{grid-template-columns:repeat(3,1fr)}
+  .card{border:3px solid var(--ink); background:rgba(0,0,0,.2); padding:8px}
+  .thumb{width:100%; aspect-ratio:1/1; object-fit:cover; image-rendering:pixelated; border:3px solid var(--ink)}
+  .lock{position:absolute; inset:0; background:rgba(14,33,72,.7); display:flex;align-items:center;justify-content:center; font-size:40px}
+  .topbar{position:absolute; left:0; right:0; top:-6px; padding:6px 12px; display:flex; gap:10px; align-items:center; justify-content:space-between}
+  .pill{border:3px solid var(--ink); background:rgba(0,0,0,.3); padding:4px 8px}
+  .sfx{position:absolute; right:14px; bottom:14px; opacity:.75}
+  .vs-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; width:380px}
+  .avatar{border:3px solid var(--ink); background:rgba(0,0,0,.2); height:120px; display:flex;align-items:center;justify-content:center; position:relative}
+  .avatar.selected{outline:6px solid var(--ac1)}
+  .pop{position:absolute; top:-10px; right:-10px; background:#8d0000; color:#fff; padding:2px 6px; border:2px solid #fff}
+  .stars{display:flex; gap:6px}
+  .star{filter:drop-shadow(2px 2px 0 #000)}
+  .foot{position:absolute; left:0; right:0; bottom:-6px; padding:8px 12px; display:flex; gap:10px; justify-content:space-between}
+  .notice{font-size:18px; opacity:.85}
+  .toast{position:fixed; left:50%; transform:translateX(-50%); bottom:18px; background:#000a; padding:8px 14px; border:3px solid var(--ink); display:none}
+  .toast.show{display:block}
+  a{color:var(--ac1)}
+  .tiny{font-size:18px}
+</style>
+</head>
+<body>
+<div id="app" class="crt">
+  <!-- TITLE -->
+  <section id="title" class="screen visible center">
+    <div class="col center" style="gap:18px">
+      <h1 class="title">ART HEIST</h1>
+      <div class="notice">A semi-serious museum-security sim • Pixel Retro • VT323</div>
+      <div class="row">
+        <button id="startBtn">Start</button>
+        <button id="settingsBtn">Settings</button>
+      </div>
+      <div class="tiny">Palette: #0E2148 #483AA0 #7965C1 #E3D095 • CRT on • A11y ready</div>
+      <img alt="bam" src="data:image/svg+xml;utf8,<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='260' height='120'><polygon points='20,60 60,20 110,40 150,15 200,40 230,20 240,60 220,90 170,80 130,105 80,90 40,100' fill='%23800020'/><text x='50' y='75' font-family='VT323' font-size='48' fill='%23E3D095'>BAM! BAM!</text></svg>">
+    </div>
+  </section>
+
+  <!-- CAMPAIGN SELECT -->
+  <section id="campaign" class="screen">
+    <div class="col" style="gap:10px">
+      <div class="topbar">
+        <div class="pill">Select Campaign</div>
+        <div class="pill"><button class="btn" data-nav="title">Back</button></div>
+      </div>
+      <div class="center" style="margin-top:40px">
+        <div class="row">
+          <div class="card" style="width:440px">
+            <h2>HEIST (Attacker)</h2>
+            <p class="muted">Infiltrate, deceive, decrypt. Avoid the alert meter.</p>
+            <button id="pickHeist">Play Heist</button>
+          </div>
+          <div class="card" style="width:440px">
+            <h2>GUARD (Defender)</h2>
+            <p class="muted">Harden systems, filter packets, spot intrusions.</p>
+            <button id="pickGuard">Play Guard</button>
+          </div>
+        </div>
+      </div>
+      <div class="foot"><span class="notice">WASD/Arrows move • Space/Enter confirm • Esc pause</span></div>
+    </div>
+  </section>
+
+  <!-- CHARACTER SELECT -->
+  <section id="charSelect" class="screen">
+    <div class="topbar">
+      <div class="pill">Character Select</div>
+      <div class="pill"><button class="btn" data-nav="campaign">Back</button></div>
+    </div>
+    <div class="row center" style="gap:40px; margin-top:40px">
+      <div class="col center">
+        <h2>1P: <span id="cCampaign"></span></h2>
+        <div class="vs-grid" id="avatarGrid"></div>
+        <button id="confirmAvatar">Confirm</button>
+      </div>
+      <div class="col center">
+        <h2 style="font-size:64px; text-shadow:4px 4px 0 #000">FIGHT!</h2>
+        <div class="avatar" style="width:260px;height:260px" id="previewAvatar">
+          <span class="pop">VS</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GALLERY MAP -->
+  <section id="map" class="screen">
+    <div class="topbar">
+      <div class="pill">Target Gallery</div>
+      <div class="row">
+        <div class="pill">Campaign: <span id="topCampaign"></span></div>
+        <div class="pill">Stars: <span id="totalStars">0</span></div>
+        <div class="pill"><button class="btn" data-nav="charSelect">Change Character</button></div>
+        <div class="pill"><button class="btn" data-nav="title">Quit</button></div>
+      </div>
+    </div>
+    <div class="grid gallery" id="gallery" style="margin-top:40px"></div>
+    <div class="foot"><span class="notice">Complete all 6 levels. Art becomes lighter each level.</span>
+      <button id="resetProgress" class="btn">Reset Progress</button></div>
+  </section>
+
+  <!-- LEVEL INTRO / HUD / CANVAS -->
+  <section id="level" class="screen">
+    <div class="topbar">
+      <div class="row">
+        <div class="pill"><span id="levelTitle">Level</span></div>
+        <div class="pill">Alert
+          <span class="bar"><i id="alertBar" style="width:0%"></i></span>
+        </div>
+        <div class="pill stars" id="hudStars"></div>
+      </div>
+      <div class="pill"><button class="btn" id="pauseBtn">Pause</button></div>
+    </div>
+    <div class="row" style="margin-top:36px; gap:18px; align-items:flex-start">
+      <div class="card" style="flex:1">
+        <canvas id="game" width="640" height="480"></canvas>
+      </div>
+      <div class="col" style="width:360px">
+        <div class="card">
+          <h3>Target: <span id="artTitle"></span></h3>
+          <div class="tiny muted" id="artMeta"></div>
+          <img id="artImg" class="thumb" alt="art">
+          <div class="tiny"><a id="artLink" target="_blank">Source</a></div>
+        </div>
+        <div class="card">
+          <h3>Minigames</h3>
+          <ol id="miniList" class="tiny"></ol>
+        </div>
+        <div class="card">
+          <h3>Controls</h3>
+          <div class="tiny">Arrows/WASD to move • Space/Enter action/confirm • Esc pause</div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="row">
+        <button id="abortLevel" class="btn">Abort</button>
+        <div class="pill">Timer: <span id="timer">--</span></div>
+      </div>
+      <div class="row sfx">
+        <button class="btn" id="muteBtn">SFX On</button>
+        <button class="btn" id="musicBtn">Music On</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- END OF LEVEL -->
+  <section id="post" class="screen center">
+    <div class="col center" style="gap:12px">
+      <h2 id="postTitle">Level Complete</h2>
+      <div class="stars" id="postStars"></div>
+      <div id="postStats" class="notice"></div>
+      <div class="row">
+        <button id="retryBtn">Retry</button>
+        <button id="nextBtn">Next</button>
+        <button data-nav="map" class="btn">Gallery</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="settings" class="screen">
+    <div class="topbar">
+      <div class="pill">Settings</div>
+      <div class="pill"><button class="btn" data-nav="title">Close</button></div>
+    </div>
+    <div class="row" style="margin-top:36px">
+      <div class="card" style="flex:1">
+        <h3>Accessibility & Video</h3>
+        <label><input type="checkbox" id="toggleCRT" checked> CRT Scanlines</label><br>
+        <label><input type="checkbox" id="toggleCB"> Color-blind overlays</label><br>
+        <label><input type="checkbox" id="toggleFlash"> Reduced flashes</label><br>
+      </div>
+      <div class="card" style="flex:1">
+        <h3>Audio</h3>
+        <div class="row"><label class="badge">SFX Volume</label><input id="sfxVol" type="range" min="0" max="1" step=".01" value=".7"></div>
+        <div class="row"><label class="badge">Music Volume</label><input id="musVol" type="range" min="0" max="1" step=".01" value=".5"></div>
+        <div class="row"><button id="testSfx" class="btn">Test SFX</button><button id="testMusic" class="btn">Test Music</button></div>
+      </div>
+      <div class="card" style="flex:1">
+        <h3>Artworks</h3>
+        <div class="tiny muted">The app tries to pull public-domain artworks from the National Gallery of Art API. If blocked, fallback pieces are used.</div>
+        <label class="tiny">Override 1 Image URL: <input id="custom1" placeholder="https://..."></label><br>
+        <label class="tiny">Override 2 Image URL: <input id="custom2" placeholder="https://..."></label><br>
+        <button id="applyArt" class="btn">Apply Overrides</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE END -->
+  <section id="theEnd" class="screen center">
+    <div class="col center" style="gap:8px">
+      <img alt="the end" style="width:420px; image-rendering:pixelated" src="data:image/svg+xml;utf8,<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='600' height='260'><rect width='100%' height='100%' fill='%23483AA0'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-family='VT323' font-size='96' fill='%23E3D095' stroke='%230E2148' stroke-width='3'>The End</text></svg>">
+      <div id="endStats" class="notice"></div>
+      <button data-nav="title" class="btn">Back to Title</button>
+    </div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ----------------------- UTIL / STATE ----------------------- */
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+const screens = ["title","campaign","charSelect","map","level","post","settings","theEnd"];
+const S = {
+  mode:"title", campaign:null, levelIndex:0, alert:0, alertMax:100, timer:0, minigameIndex:0,
+  avatar:null, reducedFlashes:false, colorBlind:false, crt:true,
+  sfxVol:.7, musVol:.5, musicOn:true, sfxOn:true,
+  bestStars:{HEIST:Array(6).fill(0), GUARD:Array(6).fill(0)},
+  paletteShift:0, artworks:[], customImgs:[null,null],
+  totalStars(){return [...this.bestStars.HEIST, ...this.bestStars.GUARD].reduce((a,b)=>a+b,0);}
+};
+function save(){ localStorage.artHeist = JSON.stringify(S); }
+function load(){
+  try{ const d = JSON.parse(localStorage.artHeist||"{}");
+    ["bestStars","reducedFlashes","colorBlind","crt","sfxVol","musVol","musicOn","sfxOn","customImgs"].forEach(k=>{
+      if(d[k]!==undefined) S[k]=d[k];
+    });
+  }catch(e){}
+}
+load();
+
+/* ----------------------- AUDIO ----------------------- */
+const AC = new (window.AudioContext||window.webkitAudioContext)();
+let musicSeq=null;
+function beep(freq=440, dur=.08, type="square", vol=S.sfxVol){
+  if(!S.sfxOn) return;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type=type; o.frequency.value=freq; g.gain.value=vol;
+  o.connect(g).connect(AC.destination); o.start();
+  g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime+dur);
+  o.stop(AC.currentTime+dur);
+}
+function playMusic(on=true){
+  if(!on){ if(musicSeq){ musicSeq.stop(); musicSeq=null; } return; }
+  // very light chiptune arpeggio loop
+  const o1=AC.createOscillator(), o2=AC.createOscillator(), g=AC.createGain();
+  o1.type="square"; o2.type="triangle"; g.gain.value=S.musVol*0.15;
+  o1.connect(g); o2.connect(g); g.connect(AC.destination);
+  const base=220; let t=0;
+  function tick(){
+    if(!musicSeq) return;
+    const n=[0,4,7,12][Math.floor((t/2)%4)];
+    o1.frequency.setValueAtTime(base*Math.pow(2,n/12), AC.currentTime);
+    o2.frequency.setValueAtTime(base*2, AC.currentTime);
+    t++; setTimeout(tick, 180);
+  }
+  musicSeq={stop:()=>{o1.stop(); o2.stop();}};
+  o1.start(); o2.start(); tick();
+}
+$("#musicBtn").onclick=()=>{
+  S.musicOn=!S.musicOn; $("#musicBtn").textContent = S.musicOn?"Music On":"Music Off";
+  if(S.musicOn){ musicSeq=null; musicSeq={stop:()=>{}}; playMusic(true); } else playMusic(false);
+};
+$("#muteBtn").onclick=()=>{ S.sfxOn=!S.sfxOn; $("#muteBtn").textContent=S.sfxOn?"SFX On":"SFX Off"; save(); }
+
+/* ----------------------- NAV ----------------------- */
+function go(id){
+  screens.forEach(s=>$("#"+s).classList.remove("visible"));
+  $("#"+id).classList.add("visible");
+  S.mode=id; save();
+}
+$$("[data-nav]").forEach(b=>b.onclick=()=>go(b.dataset.nav));
+$("#startBtn").onclick=()=>go("campaign");
+$("#settingsBtn").onclick=()=>go("settings");
+
+/* ----------------------- SETTINGS ----------------------- */
+$("#toggleCRT").checked=S.crt; $("#toggleCB").checked=S.colorBlind; $("#toggleFlash").checked=S.reducedFlashes;
+$("#sfxVol").value=S.sfxVol; $("#musVol").value=S.musVol;
+$("#toggleCRT").oninput=e=>{S.crt=e.target.checked; $("#app").classList.toggle("crt", S.crt); save();}
+$("#toggleCB").oninput=e=>{S.colorBlind=e.target.checked; save();}
+$("#toggleFlash").oninput=e=>{S.reducedFlashes=e.target.checked; save();}
+$("#sfxVol").oninput=e=>{S.sfxVol=+e.target.value; save(); beep(660,.05);}
+$("#musVol").oninput=e=>{S.musVol=+e.target.value; save();}
+$("#testSfx").onclick=()=>{[440,660,880].forEach((f,i)=>setTimeout(()=>beep(f,.06),i*100));}
+$("#testMusic").onclick=()=>{ S.musicOn=true; $("#musicBtn").textContent="Music On"; musicSeq=null; playMusic(true); }
+$("#applyArt").onclick=()=>{ S.customImgs=[$("#custom1").value||null,$("#custom2").value||null]; save(); toast("Custom artwork URLs applied. Open the Gallery again."); };
+
+/* ----------------------- AVATARS ----------------------- */
+const AVATARS={
+  HEIST:["Social Engineer","Lockpicker","Crypt0","Ghost","Backdoor Bob","Phantom"],
+  GUARD:["Forensics","Firewall Guru","Analyst","Blue Team","Patchmaster","Sentinel"]
+};
+function renderAvatars(){
+  $("#cCampaign").textContent=S.campaign;
+  const grid=$("#avatarGrid"); grid.innerHTML="";
+  AVATARS[S.campaign].forEach((name,i)=>{
+    const d=document.createElement("div"); d.className="avatar"; d.tabIndex=0;
+    d.innerHTML=`<span>${name}</span>`;
+    d.onclick=()=>{ $$(".avatar").forEach(a=>a.classList.remove("selected")); d.classList.add("selected"); S.avatar={name, i}; $("#previewAvatar").innerHTML = `<div style="font-size:40px">${name}</div><span class="pop">VS</span>`; beep(600); };
+    grid.appendChild(d);
+  });
+  S.avatar={name:AVATARS[S.campaign][0],i:0}; grid.firstChild.classList.add("selected");
+  $("#previewAvatar").innerHTML = `<div style="font-size:40px">${S.avatar.name}</div><span class="pop">VS</span>`;
+}
+$("#pickHeist").onclick=()=>{S.campaign="HEIST"; go("charSelect"); renderAvatars();}
+$("#pickGuard").onclick=()=>{S.campaign="GUARD"; go("charSelect"); renderAvatars();}
+$("#confirmAvatar").onclick=()=>{go("map"); buildGallery();}
+
+/* ----------------------- LEVELS & MINIGAMES ----------------------- */
+const LEVELS={
+  HEIST:[
+    {title:"Recon & Password Lock", mini:["PasswordLock","Phishing"]},
+    {title:"Camera Sweep & Cipher", mini:["Camera","Cipher"]},
+    {title:"Firewall Maze", mini:["Firewall"]},
+    {title:"IDS Pattern Match", mini:["IDS"]},
+    {title:"Combo: Recon+Ciphers", mini:["Phishing","Cipher","PasswordLock"]},
+    {title:"Grand Heist", mini:["Camera","Firewall","Cipher","PasswordLock"]}
+  ],
+  GUARD:[
+    {title:"Harden Passwords", mini:["PasswordLock"]},
+    {title:"Patch & Phish", mini:["Phishing"]},
+    {title:"Deploy Firewall", mini:["Firewall"]},
+    {title:"Tune the IDS", mini:["IDS"]},
+    {title:"Decrypt Intel", mini:["Cipher"]},
+    {title:"Final Defense", mini:["Firewall","IDS","Phishing"]}
+  ]
+};
+function lightenPalette(levelIndex){
+  // subtle brighten/desaturate per level
+  const amt = (levelIndex)*0.04;
+  document.body.style.filter = `saturate(${1-amt}) brightness(${1+amt})`;
+}
+
+/* ----------------------- GALLERY (Artworks) ----------------------- */
+const FALLBACK_ART=[
+  {title:"Girl with a Pearl Earring", artist:"Johannes Vermeer", year:"1665",
+   src:"https://upload.wikimedia.org/wikipedia/commons/4/47/Johannes_Vermeer_-_Girl_with_a_Pearl_Earring.jpg",
+   link:"https://www.nga.gov/"},
+  {title:"The Starry Night", artist:"Vincent van Gogh", year:"1889",
+   src:"https://upload.wikimedia.org/wikipedia/commons/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
+   link:"https://www.nga.gov/"},
+  {title:"The Great Wave off Kanagawa", artist:"Hokusai", year:"1831",
+   src:"https://upload.wikimedia.org/wikipedia/commons/0/0a/The_Great_Wave_off_Kanagawa.jpg", link:"https://www.nga.gov/"},
+  {title:"The Birth of Venus", artist:"Sandro Botticelli", year:"c.1486",
+   src:"https://upload.wikimedia.org/wikipedia/commons/1/1c/Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg", link:"https://www.nga.gov/"},
+  {title:"The Night Watch", artist:"Rembrandt", year:"1642",
+   src:"https://upload.wikimedia.org/wikipedia/commons/2/28/The_Nightwatch_by_Rembrandt.jpg", link:"https://www.nga.gov/"},
+  {title:"American Gothic", artist:"Grant Wood", year:"1930",
+   src:"https://upload.wikimedia.org/wikipedia/commons/7/79/Grant_Wood_-_American_Gothic_-_Google_Art_Project.jpg", link:"https://www.nga.gov/"},
+  {title:"Impression, Sunrise", artist:"Claude Monet", year:"1872",
+   src:"https://upload.wikimedia.org/wikipedia/commons/4/47/Claude_Monet%2C_Impression%2C_soleil_levant.jpg", link:"https://www.nga.gov/"},
+  {title:"The Persistence of Memory", artist:"Salvador Dalí", year:"1931",
+   src:"https://upload.wikimedia.org/wikipedia/en/d/dd/The_Persistence_of_Memory.jpg", link:"https://www.nga.gov/"},
+  {title:"Water Lilies", artist:"Claude Monet", year:"1916",
+   src:"https://upload.wikimedia.org/wikipedia/commons/0/0a/Claude_Monet_-_Water_Lilies_-_Google_Art_Project.jpg", link:"https://www.nga.gov/"}
+];
+async function fetchNGA(){
+  // Try NGA Collection API (public domain with images). If it fails, return []
+  try{
+    const url="https://api.nga.gov/collection/artwork?size=9&hasImages=true&isPublicDomain=true&sort=random";
+    const res = await fetch(url,{mode:"cors"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const json = await res.json();
+    // map to artwork objects; try IIIF primary image
+    const list = (json?.data||[]).map(d=>{
+      const iiif = d.images?.length ? d.images[0].iiif?.manifest : null;
+      let src = d.images?.length ? (d.images[0].iiif?.baseUrl || d.images[0].web!.url) : null;
+      // Ensure a normal image (iiif base + /full/!400,400/0/default.jpg)
+      if(d.images?.length && d.images[0].iiif?.baseUrl) src = d.images[0].iiif.baseUrl + "/full/!512,512/0/default.jpg";
+      return {
+        title:d.title, artist:(d.people?.[0]?.name)||"Unknown",
+        year:d.dates?.display||"", src, link:`https://www.nga.gov/collection/art-object-page.${d.objectId}.html`
+      };
+    }).filter(x=>x.src);
+    return list;
+  }catch(e){ console.warn("NGA fetch failed", e); return []; }
+}
+async function buildGallery(){
+  $("#topCampaign").textContent=S.campaign;
+  lightenPalette(0);
+  let arts = await fetchNGA();
+  if(!arts.length){ arts = FALLBACK_ART; toast("Using fallback artworks (NGA API blocked). You can still play!"); }
+  // Apply custom overrides if provided
+  arts = arts.map((a,i)=> ({...a, src: S.customImgs[i]?S.customImgs[i]:a.src}));
+  S.artworks = arts;
+  const g=$("#gallery"); g.innerHTML="";
+  arts.forEach((a,idx)=>{
+    const card=document.createElement("div"); card.className="card"; card.style.position="relative";
+    card.innerHTML=`
+      <img class="thumb" src="${a.src}" alt="">
+      <div class="row" style="margin-top:6px;justify-content:space-between">
+        <div style="max-width:70%"><div class="tiny"><b>${a.title}</b></div>
+        <div class="tiny muted">${a.artist} • ${a.year}</div></div>
+        <div class="stars">${renderStars(S.bestStars[S.campaign][idx])}</div>
+      </div>`;
+    const btn=document.createElement("button"); btn.className="btn"; btn.textContent="Enter";
+    btn.style.position="absolute"; btn.style.right="8px"; btn.style.bottom="8px";
+    btn.onclick=()=>startLevel(idx);
+    card.appendChild(btn);
+    g.appendChild(card);
+  });
+  $("#totalStars").textContent=S.totalStars();
+}
+function renderStars(n){
+  let s=""; for(let i=0;i<3;i++){
+    const fill = i<n ? "%23E3D095":"%23666688";
+    s+=`<img class="star" width="28" height="28" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><polygon points='32,4 40,24 62,24 44,36 52,56 32,44 12,56 20,36 2,24 24,24' fill='${fill}' stroke='%230E2148' stroke-width='4'/></svg>'/>`
+  } return s;
+}
+$("#resetProgress").onclick=()=>{ S.bestStars={HEIST:Array(6).fill(0),GUARD:Array(6).fill(0)}; save(); buildGallery(); toast("Progress reset."); }
+
+/* ----------------------- START LEVEL ----------------------- */
+const C = $("#game"), CTX = C.getContext("2d");
+let loopId=null, t0=0, currentMini=null, levelFail=false, levelTime=0;
+function startLevel(idx){
+  S.levelIndex=idx; S.minigameIndex=0; S.alert=0; levelFail=false; levelTime=0;
+  $("#levelTitle").textContent=`${S.campaign} L${idx+1}: ${LEVELS[S.campaign][idx].title}`;
+  $("#hudStars").innerHTML=renderStars(0);
+  const art=S.artworks[idx];
+  $("#artTitle").textContent=art.title; $("#artMeta").textContent=`${art.artist} • ${art.year}`;
+  $("#artImg").src=art.src; $("#artLink").href=art.link||"#";
+  $("#miniList").innerHTML = LEVELS[S.campaign][idx].mini.map((m,i)=>`<li>${m}</li>`).join("");
+  $("#timer").textContent="0.0s";
+  lightenPalette(idx);
+  go("level");
+  nextMinigame();
+  if(S.musicOn){ playMusic(true); }
+}
+function endLevel(){
+  cancelAnimationFrame(loopId); loopId=null;
+  const loss=S.alert/S.alertMax;
+  let stars=0; if(loss===0) stars=3; else if(loss<=.3) stars=2; else if(loss<=.7) stars=1; else stars=0;
+  S.bestStars[S.campaign][S.levelIndex]=Math.max(S.bestStars[S.campaign][S.levelIndex], stars);
+  save();
+  $("#postTitle").textContent = levelFail ? "Level Failed" : "Level Complete";
+  $("#postStars").innerHTML=renderStars(stars);
+  $("#postStats").textContent=`Alert ${(loss*100)|0}% • Time ${levelTime.toFixed(1)}s`;
+  go("post");
+  if(S.campaign==="HEIST" && S.bestStars.HEIST.every(s=>s>0) && S.bestStars.GUARD.every(s=>s>0)){
+    $("#endStats").textContent=`All levels cleared! Total Stars: ${S.totalStars()}`; go("theEnd");
+  }
+}
+$("#retryBtn").onclick=()=>startLevel(S.levelIndex);
+$("#nextBtn").onclick=()=>{ const i=Math.min(S.levelIndex+1,5); startLevel(i); }
+$("#abortLevel").onclick=()=>go("map");
+$("#pauseBtn").onclick=()=>toast("Paused (press actions to resume)");
+
+/* ----------------------- CORE LOOP ----------------------- */
+function setAlert(x){ S.alert=Math.min(S.alertMax, Math.max(0,x)); $("#alertBar").style.width=(S.alert/S.alertMax*100)+"%"; if(S.alert>=S.alertMax){ levelFail=true; endLevel(); } }
+function flash(){ if(S.reducedFlashes) return; C.style.filter="brightness(1.6)"; setTimeout(()=>C.style.filter="",100); }
+function tick(ts){
+  if(!t0) t0=ts; const dt=(ts-t0)/1000; t0=ts; levelTime+=dt; $("#timer").textContent = levelTime.toFixed(1)+"s";
+  currentMini?.update(dt); currentMini?.render(CTX);
+  loopId=requestAnimationFrame(tick);
+}
+
+/* ----------------------- MINIGAMES ----------------------- */
+/* Helpers for input */
+const Keys={}; window.addEventListener("keydown",e=>{Keys[e.key]=true; if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();});
+window.addEventListener("keyup",e=>Keys[e.key]=false);
+
+/* Base template */
+function MiniBase(name, time=30){ return {
+  name, time, t:0, over:false, pass:false,
+  update(dt){ this.t+=dt; if(this.t>this.time){ this.over=true; setAlert(S.alert+20); beep(200,.1); } },
+  render(ctx){ ctx.imageSmoothingEnabled=false; ctx.fillStyle="#0E2148"; ctx.fillRect(0,0,C.width,C.height); },
+  done(){return this.over;}
+};}
+
+/* 1) PasswordLock - Mastermind 4 digits */
+function PasswordLock(){
+  const M=MiniBase("PasswordLock", 40);
+  const code=Array.from({length:4},()=>Math.floor(Math.random()*10));
+  let guess=[0,0,0,0], pos=0, attempts=0;
+  M.update = function(dt){
+    MiniBase.prototype.update.call(this,dt);
+    if(this.over) return;
+    if(Keys.ArrowLeft){pos=(pos+3)%4; Keys.ArrowLeft=false; beep(500,.05);}
+    if(Keys.ArrowRight){pos=(pos+1)%4; Keys.ArrowRight=false; beep(500,.05);}
+    if(Keys.ArrowUp){guess[pos]=(guess[pos]+1)%10; Keys.ArrowUp=false; beep(660,.05);}
+    if(Keys.ArrowDown){guess[pos]=(guess[pos]+9)%10; Keys.ArrowDown=false; beep(440,.05);}
+    if(Keys[" "]||Keys.Enter){ Keys[" "]=Keys.Enter=false; attempts++;
+      let bulls=0,cows=0; for(let i=0;i<4;i++){ if(guess[i]===code[i]) bulls++; else if(code.includes(guess[i])) cows++; }
+      if(bulls===4){ this.over=true; this.pass=true; beep(1000,.15); }
+      else { setAlert(S.alert+5); flash(); toast(`Attempt ${attempts}: ${bulls} bulls, ${cows} cows`); }
+    }
+  };
+  M.render=function(ctx){
+    MiniBase.prototype.render.call(this,ctx);
+    text(ctx,"PASSWORD LOCK",20,30,24);
+    for(let i=0;i<4;i++){
+      const x=180+i*70,y=200;
+      rect(ctx,x,y,50,70,"#483AA0"); text(ctx,String(guess[i]),x+18,y+48,32);
+      if(i===pos) rect(ctx,x-6,y-6,62,82,"#E3D095",false,3);
+    }
+    text(ctx,"↑/↓ change digit • ←/→ move • Space submit",100,360,16);
+  };
+  return M;
+}
+/* 2) Firewall Maze */
+function FirewallMaze(){
+  const M=MiniBase("Firewall", 35);
+  const grid=16, size=28;
+  const walls=new Set(); // blocked ports
+  for(let i=0;i<80;i++) walls.add((Math.random()*grid|0)+","+(Math.random()*grid|0));
+  const start=[0,Math.random()*grid|0], goal=[grid-1, Math.random()*grid|0];
+  let px=start[0], py=start[1];
+  M.update=function(dt){
+    MiniBase.prototype.update.call(this,dt); if(this.over) return;
+    let nx=px, ny=py;
+    if(tap("ArrowUp","w")) ny--; if(tap("ArrowDown","s")) ny++; if(tap("ArrowLeft","a")) nx--; if(tap("ArrowRight","d")) nx++;
+    nx=Math.max(0,Math.min(grid-1,nx)); ny=Math.max(0,Math.min(grid-1,ny));
+    const key=nx+","+ny;
+    if((nx!==px||ny!==py) && walls.has(key)){ setAlert(S.alert+3); flash(); beep(220,.06); } else { px=nx; py=ny; }
+    if(px===goal[0]&&py===goal[1]){ this.over=true; this.pass=true; beep(900,.2); }
+  };
+  M.render=function(ctx){
+    MiniBase.prototype.render.call(this,ctx);
+    for(let y=0;y<grid;y++) for(let x=0;x<grid;x++){
+      const k=x+","+y;
+      ctx.fillStyle = walls.has(k) ? "#8d0000" : "#483AA0";
+      ctx.fillRect(40+x*size,40+y*size,size-2,size-2);
+    }
+    rect(ctx,40+start[0]*size,40+start[1]*size,size-2,size-2,"#00bd7e");
+    rect(ctx,40+goal[0]*size,40+goal[1]*size,size-2,size-2,"#E3D095");
+    rect(ctx,40+px*size,40+py*size,size-2,size-2,"#fff");
+    text(ctx,"FIREWALL: Reach the exit. Red = blocked ports.",40,24,16);
+  };
+  return M;
+}
+/* 3) Phishing Spotter */
+function PhishingSpotter(){
+  const M=MiniBase("Phishing", 35);
+  const items=[
+    {t:"Your MFA has expired. Visit http://it-support-security.com to re-activate.", f:true},
+    {t:"Invoice from known vendor via portal with HTTPS and correct domain.", f:false},
+    {t:"Unusual login attempt detected. Reply with your code to verify.", f:true},
+    {t:"Package delivery notice from your usual courier with tracking.", f:false},
+    {t:"Prize winner! Click to claim gift card.", f:true},
+    {t:"Shared doc from colleague on the internal drive.", f:false},
+  ];
+  let idx=0, score=0;
+  M.update=function(dt){
+    MiniBase.prototype.update.call(this,dt); if(this.over) return;
+    if(tap("ArrowLeft","a")) choose(true);
+    if(tap("ArrowRight","d")) choose(false);
+    if(idx>=items.length){ this.over=true; this.pass=score>=4; if(!this.pass) setAlert(S.alert+10); }
+  };
+  function choose(phish){
+    const it=items[idx]; if(phish===it.f){ score++; beep(700,.08);} else { setAlert(S.alert+6); flash(); beep(200,.08);}
+    idx++;
+  }
+  M.render=function(ctx){
+    MiniBase.prototype.render.call(this,ctx);
+    text(ctx,"PHISHING SPOTTER",20,28,24);
+    rect(ctx,40,120,560,180,"#483AA0");
+    textWrap(ctx, items[idx]?.t || "Done", 60, 150, 520, 20);
+    text(ctx,"← Phish • Legit →",220,340,20);
+    text(ctx,`Score ${score}/${items.length}`,250,60,18);
+  };
+  return M;
+}
+/* 4) Cipher Wheel (Caesar) */
+function CipherWheel(){
+  const M=MiniBase("Cipher", 40);
+  const plain="ARTHEIST"; const shift = (Math.random()*25|0)+1;
+  const cipher = caesar(plain,shift);
+  let cur=0;
+  M.update=function(dt){
+    MiniBase.prototype.update.call(this,dt); if(this.over) return;
+    if(tap("ArrowLeft","a")) { cur=(cur+25)%26; beep(500,.05); }
+    if(tap("ArrowRight","d")) { cur=(cur+1)%26; beep(500,.05); }
+    if(tap(" ","Enter")) {
+      if(cur===shift){ this.pass=true; this.over=true; beep(1000,.15); }
+      else{ setAlert(S.alert+5); flash(); toast("Wrong shift"); }
+    }
+  };
+  M.render=function(ctx){
+    MiniBase.prototype.render.call(this,ctx);
+    text(ctx,"CIPHER WHEEL",20,30,24);
+    text(ctx,`Cipher: ${cipher}`,180,120,28);
+    text(ctx,`Shift: ${cur}`,260,200,24);
+    text(ctx,"← / → to rotate • Space to submit",140,340,18);
+  };
+  return M;
+}
+/* 5) Camera Sweep (stealth) */
+function CameraSweep(){
+  const M=MiniBase("Camera", 35);
+  const W=20, H=14, size=28;
+  let px=1,py=H-2, goal=[W-2,1];
+  const cams=Array.from({length:3},(_,i)=>({x:4+i*6,y:4+i*2,ang:0,speed:.8+i*.2}));
+  M.update=function(dt){
+    MiniBase.prototype.update.call(this,dt); if(this.over) return;
+    cams.forEach(c=>c.ang=(c.ang+dt*c.speed)% (Math.PI*2));
+    let nx=px,ny=py; if(tap("ArrowUp","w"))ny--; if(tap("ArrowDown","s"))ny++; if(tap("ArrowLeft","a"))nx--; if(tap("ArrowRight","d"))nx++;
+    nx=Math.max(1,Math.min(W-2,nx)); ny=Math.max(1,Math.min(H-2,ny)); px=nx; py=ny;
+    // detection cone
+    cams.forEach(c=>{
+      const dx=px-c.x, dy=py-c.y; const ang=Math.atan2(dy,dx); const diff=angleDiff(ang,c.ang);
+      const dist=Math.hypot(dx,dy);
+      if(dist<6 && Math.abs(diff)<0.5){ setAlert(S.alert+2); if(!S.reducedFlashes) C.style.filter="contrast(1.4)"; }
+    });
+    if(px===goal[0] && py===goal[1]){ this.pass=true; this.over=true; beep(900,.15); }
+  };
+  M.render=function(ctx){
+    MiniBase.prototype.render.call(this,ctx);
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      ctx.fillStyle=(x===0||y===0||x===W-1||y===H-1)?"#8d0000":"#483AA0";
+      ctx.fillRect(40+x*size,40+y*size,size-2,size-2);
+    }
+    cams.forEach(c=>{
+      rect(ctx,40+c.x*size,40+c.y*size,size-2,size-2,"#E3D095");
+      // cone
+      ctx.fillStyle="rgba(255,255,153,.2)";
+      ctx.beginPath();
+      const cx=40+c.x*size+size/2, cy=40+c.y*size+size/2;
+      ctx.moveTo(cx,cy);
+      for(let a=-0.5;a<=0.5;a+=0.05){
+        ctx.lineTo(cx+Math.cos(c.ang+a)*size*6, cy+Math.sin(c.ang+a)*size*6);
+      } ctx.closePath(); ctx.fill();
+    });
+    rect(ctx,40+px*size,40+py*size,size-2,size-2,"#fff");
+    rect(ctx,40+goal[0]*size,40+goal[1]*size,size-2,size-2,"#00bd7e");
+    text(ctx,"CAMERA SWEEP: reach green without staying in cones",80,24,16);
+  };
+  return M;
+}
+/* 6) IDS Pattern Match (wildcards) */
+function IDSMatch(){
+  const M=MiniBase("IDS", 35);
+  const samples=["/login.php?u=admin","/etc/passwd","/index.html","/cmd.php?exec=cat","/wp-admin","/api/v1/users","/bin/sh","/robots.txt","/wp-login.php","/search?q=<script>"];
+  const pattern="*<script>*|*/passwd|*/bin/*|*cmd.php*";
+  let sel=new Set(), score=0;
+  M.update=function(dt){
+    MiniBase.prototype.update.call(this,dt); if(this.over) return;
+    if(tap(" ","Enter")){ // submit
+      score=0; samples.forEach((s,i)=>{ const good=matchAny(s, pattern); const chosen=sel.has(i); if(good&&chosen) score++; else if(good&&!chosen) setAlert(S.alert+4); else if(!good&&chosen) setAlert(S.alert+3); });
+      this.over=true; this.pass=score>=3;
+      if(this.pass) beep(1000,.15); else flash();
+    }
+  };
+  M.render=function(ctx){
+    MiniBase.prototype.render.call(this,ctx);
+    text(ctx,"IDS PATTERN MATCH",20,30,24);
+    text(ctx,"Select malicious requests (Space to submit)",60,60,16);
+    const x0=60,y0=100;
+    samples.forEach((s,i)=>{
+      const y=y0+i*30;
+      rect(ctx,x0,y-16,520,24, sel.has(i)?"#8d0000":"#483AA0");
+      text(ctx,s,x0+8,y,18);
+    });
+  };
+  C.onclick=function(e){
+    if(S.mode!=="level" || currentMini?.name!=="IDS") return;
+    const r=C.getBoundingClientRect(), mx=(e.clientX-r.left)/r.width*C.width, my=(e.clientY-r.top)/r.height*C.height;
+    const x0=60,y0=100;
+    const i=Math.floor((my-y0)/30); if(i>=0 && i<10) { if(sel.has(i)) sel.delete(i); else sel.add(i); beep(600,.05); }
+  };
+  return M;
+}
+
+/* ----------------------- MINI MANAGER ----------------------- */
+function nextMinigame(){
+  const arr = LEVELS[S.campaign][S.levelIndex].mini;
+  if(S.minigameIndex>=arr.length){ endLevel(); return; }
+  const m = arr[S.minigameIndex++];
+  currentMini = { PasswordLock, Firewall:FirewallMaze, Phishing:PhishingSpotter, Cipher:CipherWheel, Camera:CameraSweep, IDS:IDSMatch }[m]();
+  $("#miniList").querySelectorAll("li").forEach((li,i)=>{ li.style.opacity = i<S.minigameIndex?1:.6; if(i===S.minigameIndex-1) li.style.color="#E3D095"; });
+  t0=0; if(loopId) cancelAnimationFrame(loopId); loopId=requestAnimationFrame(tick);
+  // When mini finishes, chain to next with tiny delay
+  const chk = setInterval(()=>{
+    if(currentMini.done()){
+      clearInterval(chk);
+      if(!currentMini.pass){ flash(); }
+      $("#hudStars").innerHTML=renderStars( Math.max(0, 3 - Math.ceil(S.alert/34)) );
+      setTimeout(nextMinigame, 500);
+    }
+  },120);
+}
+
+/* ----------------------- INPUT HELPERS ----------------------- */
+function tap(k1,k2){ if(Keys[k1]||Keys[k2]){ Keys[k1]=Keys[k2]=false; return true;} return false; }
+function angleDiff(a,b){ let d=a-b; while(d>Math.PI) d-=Math.PI*2; while(d<-Math.PI) d+=Math.PI*2; return d; }
+function rect(ctx,x,y,w,h,col,fill=true,sw=2){ ctx.strokeStyle="#0E2148"; ctx.lineWidth=sw; if(fill){ ctx.fillStyle=col; ctx.fillRect(x,y,w,h);} ctx.strokeRect(x,y,w,h); }
+function text(ctx,str,x,y,sz=20){ ctx.fillStyle="#E3D095"; ctx.font=`${sz}px VT323`; ctx.fillText(str,x,y); }
+function textWrap(ctx,str,x,y,w,lh=18){ const words=str.split(" "); let line="", dy=0; ctx.font=`20px VT323`; ctx.fillStyle="#E3D095";
+  for(let n=0;n<words.length;n++){ const test=line+words[n]+" "; const m=ctx.measureText(test); if(m.width>w && n>0){ ctx.fillText(line,x,y+dy); line=words[n]+" "; dy+=lh; } else line=test; }
+  ctx.fillText(line,x,y+dy);
+}
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1500); }
+function caesar(s,sh){ return s.replace(/[A-Z]/g,c=>String.fromCharCode(65+( (c.charCodeAt(0)-65+sh)%26 ))); }
+function matchAny(s, pat){ return pat.split("|").some(p=>wild(s,p)); }
+function wild(str, pat){ // '*' and '?' only
+  const rx = new RegExp("^"+pat.replace(/[.+^${}()|[\]\\]/g,'\\$&').replace(/\*/g,".*").replace(/\?/g,".")+"$"); return rx.test(str);
+}
+
+/* ----------------------- INIT ----------------------- */
+$("#app").classList.toggle("crt", S.crt);
+$("#musicBtn").textContent=S.musicOn?"Music On":"Music Off";
+$("#muteBtn").textContent=S.sfxOn?"SFX On":"SFX Off";
+
+/* Keyboard confirm shortcuts on menus */
+window.addEventListener("keydown",(e)=>{
+  if(S.mode==="title" && (e.key==="Enter"||e.key===" ")){ go("campaign"); }
+});
+
+/* ----------------------- END ----------------------- */
+</script>
+</body>
+</html>
