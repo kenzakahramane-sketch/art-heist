@@ -12,18 +12,33 @@
     --scan:linear-gradient(rgba(255,255,255,0.06) 50%, rgba(0,0,0,0.06) 50%);
   }
   *{box-sizing:border-box}
-  html,body{height:100%;margin:0;background:var(--bg0);color:var(--ink);font-family:"VT323",monospace; letter-spacing:.5px}
-  #app{min-height:100%;display:flex;align-items:center;justify-content:center; overflow:hidden}
+  html,body{
+    height:100%; margin:0; background:var(--bg0); color:var(--ink);
+    font-family:"VT323",monospace; letter-spacing:.5px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  /* App is fixed; screens stack on top of each other */
+  #app{
+    position:relative;
+    width:1100px; max-width:95vw; min-height:640px;
+    overflow:hidden;
+  }
   .crt::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.25;background-image:var(--scan);background-size:100% 2px;mix-blend-mode:overlay}
   canvas{image-rendering:pixelated}
   button,.btn{font:inherit;border:3px solid var(--ink); background:transparent; color:var(--ink);
     padding:.4rem .8rem; cursor:pointer; box-shadow:4px 4px 0 #0006; text-transform:uppercase}
   button:hover{transform:translate(-1px,-1px)}
   .muted{opacity:.75}
-  /* >>> hard-hide screens so only one shows */
-  .screen{display:none !important; width:1100px; max-width:95vw; min-height:640px; border:6px solid var(--ink); padding:18px;
-    background:linear-gradient(180deg,var(--bg1),var(--bg0)); position:relative}
+
+  /* ONE SCREEN AT A TIME */
+  .screen{
+    position:absolute; inset:0;
+    display:none !important;
+    border:6px solid var(--ink); padding:18px;
+    background:linear-gradient(180deg,var(--bg1),var(--bg0));
+  }
   .visible{display:block !important}
+
   h1,h2,h3{margin:.25rem 0; line-height:1}
   h1.title{font-size:72px; color:var(--ink2); text-shadow:4px 4px 0 #000, 0 0 18px #ffd}
   .row{display:flex; gap:14px; align-items:center}
@@ -36,7 +51,6 @@
   .gallery{grid-template-columns:repeat(3,1fr)}
   .card{border:3px solid var(--ink); background:rgba(0,0,0,.2); padding:8px}
   .thumb{width:100%; aspect-ratio:1/1; object-fit:cover; image-rendering:pixelated; border:3px solid var(--ink)}
-  .lock{position:absolute; inset:0; background:rgba(14,33,72,.7); display:flex;align-items:center;justify-content:center; font-size:40px}
   .topbar{position:absolute; left:0; right:0; top:-6px; padding:6px 12px; display:flex; gap:10px; align-items:center; justify-content:space-between}
   .pill{border:3px solid var(--ink); background:rgba(0,0,0,.3); padding:4px 8px}
   .sfx{position:absolute; right:14px; bottom:14px; opacity:.75}
@@ -71,7 +85,7 @@
   </section>
 
   <!-- CAMPAIGN SELECT -->
-  <section id="campaign" class="screen">
+  <section id="campaign" class="screen" hidden>
     <div class="col" style="gap:10px">
       <div class="topbar">
         <div class="pill">Select Campaign</div>
@@ -96,7 +110,7 @@
   </section>
 
   <!-- CHARACTER SELECT -->
-  <section id="charSelect" class="screen">
+  <section id="charSelect" class="screen" hidden>
     <div class="topbar">
       <div class="pill">Character Select</div>
       <div class="pill"><button class="btn" data-nav="campaign">Back</button></div>
@@ -117,7 +131,7 @@
   </section>
 
   <!-- GALLERY MAP -->
-  <section id="map" class="screen">
+  <section id="map" class="screen" hidden>
     <div class="topbar">
       <div class="pill">Target Gallery</div>
       <div class="row">
@@ -132,8 +146,8 @@
       <button id="resetProgress" class="btn">Reset Progress</button></div>
   </section>
 
-  <!-- LEVEL / HUD -->
-  <section id="level" class="screen">
+  <!-- LEVEL -->
+  <section id="level" class="screen" hidden>
     <div class="topbar">
       <div class="row">
         <div class="pill"><span id="levelTitle">Level</span></div>
@@ -178,7 +192,7 @@
   </section>
 
   <!-- END OF LEVEL -->
-  <section id="post" class="screen center">
+  <section id="post" class="screen center" hidden>
     <div class="col center" style="gap:12px">
       <h2 id="postTitle">Level Complete</h2>
       <div class="stars" id="postStars"></div>
@@ -192,7 +206,7 @@
   </section>
 
   <!-- SETTINGS -->
-  <section id="settings" class="screen">
+  <section id="settings" class="screen" hidden>
     <div class="topbar">
       <div class="pill">Settings</div>
       <div class="pill"><button class="btn" data-nav="title">Close</button></div>
@@ -221,7 +235,7 @@
   </section>
 
   <!-- THE END -->
-  <section id="theEnd" class="screen center">
+  <section id="theEnd" class="screen center" hidden>
     <div class="col center" style="gap:8px">
       <img alt="the end" style="width:420px; image-rendering:pixelated" src="data:image/svg+xml;utf8,<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='600' height='260'><rect width='100%' height='100%' fill='%23483AA0'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-family='VT323' font-size='96' fill='%23E3D095' stroke='%230E2148' stroke-width='3'>The End</text></svg>">
       <div id="endStats" class="notice"></div>
@@ -290,8 +304,16 @@ $("#muteBtn").onclick=()=>{ S.sfxOn=!S.sfxOn; $("#muteBtn").textContent=S.sfxOn?
 
 /* ----------------------- NAV ----------------------- */
 function go(id){
-  screens.forEach(s=>$("#"+s).classList.remove("visible"));
-  $("#"+id).classList.add("visible");
+  screens.forEach(s=>{
+    const el=$("#"+s);
+    el.classList.remove("visible");
+    el.setAttribute("hidden","");
+    el.setAttribute("aria-hidden","true");
+  });
+  const target=$("#"+id);
+  target.classList.add("visible");
+  target.removeAttribute("hidden");
+  target.setAttribute("aria-hidden","false");
   S.mode=id; save();
 }
 $$("[data-nav]").forEach(b=>b.onclick=()=>go(b.dataset.nav));
@@ -451,7 +473,7 @@ function startLevel(idx){
   $("#timer").textContent="0.0s";
   lightenPalette(idx);
   go("level");
-  focusCanvas();           /* >>> ensure keyboard focus */
+  focusCanvas();  // ensure keyboard focus
   nextMinigame();
   if(S.musicOn){ playMusic(true); }
 }
@@ -465,7 +487,6 @@ function endLevel(){
   $("#postStars").innerHTML=renderStars(stars);
   $("#postStats").textContent=`Alert ${(loss*100)|0}% • Time ${levelTime.toFixed(1)}s`;
   go("post");
-  /* >>> show The End only after actual success of all levels */
   if(!levelFail){
     const allCleared = S.bestStars.HEIST.every(s=>s>0) && S.bestStars.GUARD.every(s=>s>0);
     if(allCleared){ $("#endStats").textContent=`All levels cleared! Total Stars: ${S.totalStars()}`; go("theEnd"); return; }
@@ -473,12 +494,12 @@ function endLevel(){
 }
 $("#retryBtn").onclick=()=>startLevel(S.levelIndex);
 $("#nextBtn").onclick=()=>{ const i=Math.min(S.levelIndex+1,5); startLevel(i); }
-$("#abortLevel").onclick=()=>go("map");
+($("#abortLevel").onclick=()=>go("map"));
 $("#pauseBtn").onclick=()=>toast("Paused (press actions to resume)");
 
 /* ----------------------- GAME LOOP ----------------------- */
 function setAlert(x){ S.alert=Math.min(S.alertMax, Math.max(0,x)); $("#alertBar").style.width=(S.alert/S.alertMax*100)+"%"; if(S.alert>=S.alertMax){ levelFail=true; endLevel(); } }
-function flash(){ if(S.reducedFlashes) return; C.style.filter="brightness(1.6)"; setTimeout(()=>C.style.filter="",100); }
+function flash(){ if(S.reducedFlashes) return; C.style.filter="brightness(1.6)"; setTimeout(()=>C.style.filter("",100)); }
 function tick(ts){
   if(!t0) t0=ts; const dt=(ts-t0)/1000; t0=ts; levelTime+=dt; $("#timer").textContent = levelTime.toFixed(1)+"s";
   currentMini?.update(dt); currentMini?.render(CTX);
@@ -722,7 +743,7 @@ function caesar(s,sh){ return s.replace(/[A-Z]/g,c=>String.fromCharCode(65+( (c.
 function matchAny(s, pat){ return pat.split("|").some(p=>wild(s,p)); }
 function wild(str, pat){ const rx = new RegExp("^"+pat.replace(/[.+^${}()|[\\]\\\\]/g,'\\$&').replace(/\*/g,".*").replace(/\?/g,".")+"$"); return rx.test(str); }
 
-/* >>> ensure keyboard focus + audio unlock */
+/* focus + audio unlock */
 function focusCanvas(){ C.setAttribute('tabindex','0'); C.focus(); }
 function unlockAudioOnce(){
   const resume = ()=>{ if(AC.state === 'suspended') AC.resume(); document.removeEventListener('click',resume); document.removeEventListener('keydown',resume); };
